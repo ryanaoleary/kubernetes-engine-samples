@@ -16,7 +16,7 @@
 apiVersion: ray.io/v1
 kind: RayService
 metadata:
-  name: model-composition
+  name: vllm-tpu
 spec:
   serveConfigV2: |
     applications:
