@@ -174,6 +174,10 @@ def get_num_tpu_chips() -> int:
     return int(ray.cluster_resources()["TPU"])
 
 def get_tpu_head() -> Optional[str]:
+    if "TPU" not in ray.cluster_resources():
+         # Pass in # TPU heads when the current Ray cluster resources can't be auto-detected.
+        if os.environ.get('TPU_HEADS') is not None:
+            return int(os.environ.get('TPU_HEADS'))
     # return the TPU-{accelerator}-head resource
     for key, _ in ray.cluster_resources().items():
         if key.endswith("head"):
