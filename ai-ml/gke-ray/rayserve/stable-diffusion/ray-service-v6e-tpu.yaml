@@ -1,0 +1,75 @@
+apiVersion: ray.io/v1
+kind: RayService
+metadata:
+  name: stable-diffusion-tpu
+spec:
+  serveConfigV2: |
+    applications:
+      - name: stable_diffusion
+        import_path: ai-ml.gke-ray.rayserve.stable-diffusion.stable_diffusion_tpu:deployment
+        runtime_env:
+          working_dir: "https://github.com/GoogleCloudPlatform/kubernetes-engine-samples/archive/refs/heads/main.zip"
+          pip:
+            - pydantic<2
+            - google-api-python-client
+            - pillow
+            - diffusers==0.11.1
+            - transformers==4.24.0
+            - flax
+            - ml_dtypes==0.2.0
+            - jax[tpu]==0.4.33
+            - -f https://storage.googleapis.com/jax-releases/libtpu_releases.html
+            - fastapi
+  rayClusterConfig:
+    rayVersion: '2.37.0'
+    headGroupSpec:
+      rayStartParams: {}
+      template:
+        spec:
+          containers:
+          - name: ray-head
+            image: rayproject/ray:2.37.0-py310
+            ports:
+            - containerPort: 6379
+              name: gcs
+            - containerPort: 8265
+              name: dashboard
+            - containerPort: 10001
+              name: client
+            - containerPort: 8000
+              name: serve
+            resources:
+              limits:
+                cpu: "2"
+                ephemeral-storage: 5Gi
+                memory: "8G"
+              requests:
+                cpu: "2"
+                ephemeral-storage: 5Gi
+                memory: "8G"
+    workerGroupSpecs:
+    - replicas: 1
+      minReplicas: 1
+      maxReplicas: 10
+      numOfHosts: 1
+      groupName: tpu-group
+      rayStartParams: {}
+      template:
+        spec:
+          containers:
+          - name: ray-worker
+            image: rayproject/ray:2.37.0-py310
+            resources:
+              limits:
+                cpu: "100"
+                ephemeral-storage: 20Gi
+                google.com/tpu: "4"
+                memory: 200G
+              requests:
+                cpu: "100"
+                ephemeral-storage: 20Gi
+                google.com/tpu: "4"
+                memory: 200G
+          nodeSelector:
+            cloud.google.com/gke-tpu-accelerator: tpu-v6e-slice
+            cloud.google.com/gke-tpu-topology: 2x2

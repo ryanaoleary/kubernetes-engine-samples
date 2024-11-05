@@ -1,0 +1,170 @@
+# apiVersion: storage.k8s.io/v1
+# kind: StorageClass
+# metadata:
+#     name: hyperdisk-ml
+# parameters:
+#     type: hyperdisk-ml
+# provisioner: pd.csi.storage.gke.io
+# allowVolumeExpansion: false
+# reclaimPolicy: Delete
+# volumeBindingMode: WaitForFirstConsumer
+# ---
+# apiVersion: v1
+# kind: PersistentVolumeClaim
+# metadata:
+#   name: ryanaoleary-llama-405b-pvc
+# spec:
+#   storageClassName: hyperdisk-ml
+#   accessModes:
+#   - ReadWriteOnce
+#   resources:
+#     requests:
+#       storage: 3000G
+# ---
+# apiVersion: batch/v1
+# kind: Job
+# metadata:
+#   name: producer-job
+# spec:
+#   template:  # Template for the Pods the Job will create
+#     spec:
+#       affinity:
+#         nodeAffinity:
+#           requiredDuringSchedulingIgnoredDuringExecution:
+#             nodeSelectorTerms:
+#             - matchExpressions:
+#               - key: cloud.google.com/compute-class
+#                 operator: In
+#                 values:
+#                 - "Performance"
+#             - matchExpressions:
+#               - key: cloud.google.com/machine-family
+#                 operator: In
+#                 values:
+#                 - "c3"
+#             - matchExpressions:
+#               - key: topology.kubernetes.io/zone
+#                 operator: In
+#                 values:
+#                 - "us-central2"
+#       containers:
+#       - name: copy
+#         resources:
+#           requests:
+#             cpu: "32"
+#           limits:
+#             cpu: "32"
+#         image: huggingface/downloader:0.17.3
+#         command: [ "huggingface-cli" ]
+#         args:
+#         - download
+#         - meta-llama/Llama-3.1-405B
+#         - --local-dir=/data/llama-405b
+#         - --local-dir-use-symlinks=False
+#         env:
+#         - name: HUGGING_FACE_HUB_TOKEN
+#           valueFrom:
+#             secretKeyRef:
+#               name: hf-secret
+#               key: hf_api_token
+#         volumeMounts:
+#           - mountPath: "/data"
+#             name: volume
+#       restartPolicy: Never
+#       volumes:
+#         - name: volume
+#           persistentVolumeClaim:
+#             claimName: ryanaoleary-llama-405b-pvc
+#   parallelism: 1         # Run 1 Pods concurrently
+#   completions: 1         # Once 1 Pods complete successfully, the Job is done
+#   backoffLimit: 4        # Max retries on failure
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fetch-hf-model-scripts
+data:
+  fetch_model.sh: |-
+    #!/bin/sh
+    pip install huggingface_hub[hf_transfer] && \
+    HF_HUB_ENABLE_HF_TRANSFER=1 && \
+
+    pip install gsutil && \
+
+    MODEL_NAME=$(echo ${MODEL_ID}) && \
+    BUCKET_PATH=$(echo ${BUCKET_NAME}) && \
+    SHARD_PATH=data/llama3-405b-shard && \
+
+    mkdir -p ${SHARD_PATH} && \
+    mkdir -p ${MODEL_NAME} && \
+
+    huggingface-cli download ${MODEL_NAME} --local-dir ${MODEL_NAME} && \
+
+    gsutil cp -r ${MODEL_NAME} ${BUCKET_PATH} && \
+
+    # python3 /workspace/vllm/save_sharded_state.py --model ${MODEL_NAME} --quantization None --tensor-parallel-size 64 --output ${SHARD_PATH} && \
+
+    # gsutil cp -r ${SHARD_PATH} ${BUCKET_PATH} && \
+
+    echo -e "\nCompleted sharding model to ${BUCKET_PATH}"
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: data-loader-llama-3-405b
+  labels:
+    app: data-loader-llama-3-405b
+spec:
+  ttlSecondsAfterFinished: 120
+  template:
+    metadata:
+      labels:
+        app: data-loader-llama-3-405b
+    spec:
+      restartPolicy: Never
+      nodeSelector:
+        cloud.google.com/machine-family: c3
+      containers:
+      - name: vllm
+        image: us-central2-docker.pkg.dev/tpu-vm-gke-testing/ryanaoleary-vllm-tpu/vllm-tpu:latest
+        resources:
+          limits:
+            cpu: "16"
+            ephemeral-storage: 1000Gi
+            memory: 100G
+          requests:
+            cpu: "16"
+            ephemeral-storage: 1000Gi
+            memory: 100G
+        command:
+        - /scripts/fetch_model.sh
+        env:
+        - name: HUGGING_FACE_HUB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: hf-secret
+              key: hf_api_token
+        - name: MODEL_ID
+          value: "meta-llama/Meta-Llama-3.1-70B"
+        - name: BUCKET_NAME
+          value: "gs://ryanaoleary-llama3-70b"
+        volumeMounts:
+        - mountPath: "/scripts/"
+          name: scripts-volume
+          readOnly: true
+        - mountPath: "/data"
+          name: data
+      volumes:
+      - name: scripts-volume
+        configMap:
+          defaultMode: 0700
+          name: fetch-hf-model-scripts
+          items:
+          - key: fetch_model.sh
+            path: fetch_model.sh
+      - name: data
+        persistentVolumeClaim:
+          claimName: llama3-405b-data
+      tolerations:
+      - key: "key"
+        operator: "Exists"
+        effect: "NoSchedule"

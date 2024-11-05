@@ -30,6 +30,7 @@ spec:
           env_vars:
             MODEL_ID: "meta-llama/Meta-Llama-3-8B-Instruct"
             TPU_CHIPS: "8"
+            VLLM_XLA_CACHE_PATH: 
   rayClusterConfig:
     rayVersion: 2.34.0
     headGroupSpec:
@@ -38,7 +39,7 @@ spec:
         spec:
           containers:
           - name: ray-head
-            image: $VLLM_IMAGE
+            image: us-central1-docker.pkg.dev/tpu-vm-gke-testing/vllm-tpu/vllm-tpu:latest
             imagePullPolicy: IfNotPresent
             ports:
             - containerPort: 6379
@@ -73,7 +74,7 @@ spec:
         spec:
           containers:
             - name: ray-worker
-              image: $VLLM_IMAGE
+              image: us-central1-docker.pkg.dev/tpu-vm-gke-testing/vllm-tpu/vllm-tpu:latest
               imagePullPolicy: IfNotPresent
               resources:
                 limits:
@@ -94,6 +95,15 @@ spec:
                     secretKeyRef:
                       name: hf-secret
                       key: hf_api_token
+              volumeMounts:
+              - name: gcs-fuse-model
+                mountPath: /llama
+          volumes:
+          - name: gcs-fuse-model
+            csi:
+              driver: gcsfuse.csi.storage.gke.io
+              volumeAttributes:
+                bucketName: ryanaoleary-llama3
           nodeSelector:
             cloud.google.com/gke-tpu-accelerator: tpu-v5-lite-podslice
             cloud.google.com/gke-tpu-topology: 2x4

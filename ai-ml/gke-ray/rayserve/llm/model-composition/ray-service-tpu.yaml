@@ -31,8 +31,8 @@ spec:
         env_vars:
           ASSIST_MODEL_ID: "meta-llama/Meta-Llama-3-8B-Instruct"
           SUMMARIZER_MODEL_ID: "google/gemma-7b-it"
-          TPU_CHIPS: "16"
-          TPU_HEADS: "2"
+          # TPU_CHIPS: "16"
+          # TPU_HEADS: "2"
   rayClusterConfig:
     headGroupSpec:
       rayStartParams:
@@ -70,7 +70,8 @@ spec:
       maxReplicas: 4
       numOfHosts: 2
       groupName: tpu-group
-      rayStartParams: {}
+      rayStartParams:
+        resources: '"{\"TPU\": 4}"'
       template:
         spec:
           containers:

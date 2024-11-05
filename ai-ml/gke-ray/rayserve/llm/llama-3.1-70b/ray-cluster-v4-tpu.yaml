@@ -24,7 +24,7 @@ spec:
       spec:
         containers:
           - name: ray-head
-            image: $VLLM_IMAGE
+            image: us-central2-docker.pkg.dev/tpu-vm-gke-testing/ryanaoleary-vllm-tpu/vllm-tpu:latest
             imagePullPolicy: IfNotPresent
             resources:
               limits:
@@ -61,7 +61,7 @@ spec:
       spec:
         containers:
           - name: ray-worker
-            image: $VLLM_IMAGE
+            image: us-central2-docker.pkg.dev/tpu-vm-gke-testing/ryanaoleary-vllm-tpu/vllm-tpu:latest
             imagePullPolicy: IfNotPresent
             resources:
               limits:
