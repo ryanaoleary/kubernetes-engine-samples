@@ -21,7 +21,7 @@ spec:
   serveConfigV2: |
     applications:
       - name: llm
-        import_path: ai-ml.gke-ray.rayserve.llm.serve_tpu:model
+        import_path: ai-ml.gke-ray.rayserve.llm.tpu.serve_tpu:model
         deployments:
         - name: VLLMDeployment
           num_replicas: 1
