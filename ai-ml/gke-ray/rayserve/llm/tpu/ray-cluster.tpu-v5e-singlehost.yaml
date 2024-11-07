@@ -33,10 +33,6 @@ spec:
                   secretKeyRef:
                     name: hf-secret
                     key: hf_api_token
-              - name: MODEL_ID
-                value: "mistralai/Mistral-7B-Instruct-v0.3"
-              - name: TOKENIZER_MODE
-                value: "mistral"
               - name: VLLM_XLA_CACHE_PATH
                 value: "/data"
             ports:
@@ -73,7 +69,7 @@ spec:
   workerGroupSpecs:
   - groupName: tpu-group
     replicas: 1
-    minReplicas: 0
+    minReplicas: 1
     maxReplicas: 1
     numOfHosts: 1
     rayStartParams: {}

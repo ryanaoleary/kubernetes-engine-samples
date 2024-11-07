@@ -29,7 +29,10 @@ spec:
           working_dir: "https://github.com/ryanaoleary/kubernetes-engine-samples/archive/refs/heads/single-host-tpu-rayservice.zip"
           env_vars:
             MODEL_ID: $MODEL_ID
-            TPU_CHIPS: "8"
+            MAX_MODEL_LEN: $MAX_MODEL_LEN
+            DTYPE: $DTYPE
+            TOKENIZER_MODE: $TOKENIZER_MODE
+            TPU_CHIPS: 8
   rayClusterConfig:
     headGroupSpec:
       rayStartParams: {}
@@ -61,8 +64,6 @@ spec:
                 secretKeyRef:
                   name: hf-secret
                   key: hf_api_token
-            - name: MAX_MODEL_LEN
-              value: "8192"
             - name: VLLM_XLA_CACHE_PATH
               value: "/data"
             resources:
@@ -133,8 +134,6 @@ spec:
                     secretKeyRef:
                       name: hf-secret
                       key: hf_api_token
-                - name: MAX_MODEL_LEN
-                  value: "8192"
                 - name: VLLM_XLA_CACHE_PATH
                   value: "/data"
               securityContext:

@@ -33,10 +33,6 @@ spec:
                   secretKeyRef:
                     name: hf-secret
                     key: hf_api_token
-              - name: MODEL_ID
-                value: "meta-llama/Meta-Llama-3.1-70B"
-              - name: MAX_MODEL_LEN
-                value: "8192"
               - name: VLLM_XLA_CACHE_PATH
                 value: "/data"
             ports:
@@ -102,17 +98,13 @@ spec:
                 ephemeral-storage: 40G
                 memory: 200G
             env:
-              - name: MAX_MODEL_LEN
-                value: "8192"
-              - name: MODEL_ID
-                value: "meta-llama/Meta-Llama-3.1-70B"
-              - name: VLLM_XLA_CACHE_PATH
-                value: "/data"
               - name: HUGGING_FACE_HUB_TOKEN
                 valueFrom:
                   secretKeyRef:
                     name: hf-secret
                     key: hf_api_token
+              - name: VLLM_XLA_CACHE_PATH
+                value: "/data"
             securityContext:
               privileged: true
             volumeMounts:
