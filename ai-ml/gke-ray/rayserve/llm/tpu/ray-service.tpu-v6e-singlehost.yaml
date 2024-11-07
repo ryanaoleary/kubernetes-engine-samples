@@ -28,11 +28,11 @@ spec:
         runtime_env:
           working_dir: "https://github.com/ryanaoleary/kubernetes-engine-samples/archive/refs/heads/single-host-tpu-rayservice.zip"
           env_vars:
-            MODEL_ID: $MODEL_ID
-            MAX_MODEL_LEN: $MAX_MODEL_LEN
-            DTYPE: $DTYPE
-            TOKENIZER_MODE: $TOKENIZER_MODE
-            TPU_CHIPS: 8
+            MODEL_ID: "$MODEL_ID"
+            MAX_MODEL_LEN: "$MAX_MODEL_LEN"
+            DTYPE: "$DTYPE"
+            TOKENIZER_MODE: "$TOKENIZER_MODE"
+            TPU_CHIPS: "8"
   rayClusterConfig:
     headGroupSpec:
       rayStartParams: {}
