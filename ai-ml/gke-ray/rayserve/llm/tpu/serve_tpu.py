@@ -90,19 +90,19 @@ def get_num_tpu_chips() -> int:
     return int(ray.cluster_resources()["TPU"])
 
 def get_max_model_len() -> Optional[int]:
-    if 'MAX_MODEL_LEN' in os.environ:
-        return int(os.environ['MAX_MODEL_LEN'])
-    return None
+    if 'MAX_MODEL_LEN' not in os.environ or os.environ['MAX_MODEL_LEN'] == "":
+        return None
+    return int(os.environ['MAX_MODEL_LEN'])
 
 def get_tokenizer_mode() -> str:
-    if 'TOKENIZER_MODE' in os.environ:
-        return os.environ['TOKENIZER_MODE']
-    return "auto"
-
+    if 'TOKENIZER_MODE' not in os.environ or os.environ['TOKENIZER_MODE'] == "":
+        return "auto"
+    return os.environ['TOKENIZER_MODE']
+    
 def get_dtype() -> str:
-    if 'DTYPE' in os.environ:
-        return os.environ['DTYPE']
-    return "auto"
+    if 'DTYPE' not in os.environ or os.environ['DTYPE'] == "":
+        return "auto"
+    return os.environ['DTYPE']
 
 def build_app(cli_args: Dict[str, str]) -> serve.Application:
     """Builds the Serve app based on CLI arguments."""
