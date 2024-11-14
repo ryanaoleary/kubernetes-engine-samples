@@ -26,7 +26,7 @@ spec:
         - name: VLLMDeployment
           num_replicas: 1
         runtime_env:
-          working_dir: "https://github.com/ryanaoleary/kubernetes-engine-samples/archive/refs/heads/single-host-tpu-rayservice.zip"
+          working_dir: "https://github.com/GoogleCloudPlatform/kubernetes-engine-samples/archive/main.zip"
           env_vars:
             MODEL_ID: "$MODEL_ID"
             MAX_MODEL_LEN: "$MAX_MODEL_LEN"
