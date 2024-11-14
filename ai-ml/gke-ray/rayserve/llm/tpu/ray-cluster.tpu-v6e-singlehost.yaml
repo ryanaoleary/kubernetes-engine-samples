@@ -35,13 +35,11 @@ spec:
             imagePullPolicy: IfNotPresent
             resources:
               limits:
-                cpu: "8"
-                ephemeral-storage: 5Gi
-                memory: 40G
+                cpu: "2"
+                memory: 8G
               requests:
-                cpu: "8"
-                ephemeral-storage: 5Gi
-                memory: 40G
+                cpu: "2"
+                memory: 8G
             env:
               - name: HUGGING_FACE_HUB_TOKEN
                 valueFrom:
@@ -120,8 +118,6 @@ spec:
                     key: hf_api_token
               - name: VLLM_XLA_CACHE_PATH
                 value: "/data"
-            securityContext:
-              privileged: true
             volumeMounts:
             - name: gcs-fuse-csi-ephemeral
               mountPath: /data

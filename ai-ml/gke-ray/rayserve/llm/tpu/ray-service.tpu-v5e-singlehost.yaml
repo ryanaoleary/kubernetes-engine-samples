@@ -68,13 +68,11 @@ spec:
               value: "/data"
             resources:
               limits:
-                cpu: "8"
-                ephemeral-storage: 5Gi
-                memory: 40G
+                cpu: "2"
+                memory: 8G
               requests:
-                cpu: "8"
-                ephemeral-storage: 5Gi
-                memory: 40G
+                cpu: "2"
+                memory: 8G
             volumeMounts:
             - name: gcs-fuse-csi-ephemeral
               mountPath: /data
