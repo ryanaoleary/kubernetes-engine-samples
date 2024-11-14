@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# [START gke_ai_ml_gke_ray_rayserve_llm_model_composition_v6e_tpu]
+# [START gke_ai_ml_gke_ray_rayserve_llm_model_composition_v6e_singlehost_tpu]
 apiVersion: ray.io/v1
 kind: RayService
 metadata:
@@ -149,4 +149,4 @@ spec:
           nodeSelector:
             cloud.google.com/gke-tpu-accelerator: tpu-v6e-slice
             cloud.google.com/gke-tpu-topology: 2x4
-# [END gke_ai_ml_gke_ray_rayserve_llm_model_composition_v6e_tpu]
+# [END gke_ai_ml_gke_ray_rayserve_llm_model_composition_v6e_singlehost_tpu]
