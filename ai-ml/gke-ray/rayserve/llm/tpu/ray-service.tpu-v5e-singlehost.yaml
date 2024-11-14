@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# [START gke_ai_ml_gke_ray_rayserve_rayservice_tpu_v6e_singlehost]
+# [START gke_ai_ml_gke_ray_rayserve_rayservice_tpu_v5e_singlehost]
 apiVersion: ray.io/v1
 kind: RayService
 metadata:
