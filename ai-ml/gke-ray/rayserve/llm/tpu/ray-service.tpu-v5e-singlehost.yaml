@@ -75,8 +75,6 @@ spec:
                 cpu: "8"
                 ephemeral-storage: 5Gi
                 memory: 40G
-            securityContext:
-              privileged: true
             volumeMounts:
             - name: gcs-fuse-csi-ephemeral
               mountPath: /data
@@ -136,8 +134,6 @@ spec:
                       key: hf_api_token
                 - name: VLLM_XLA_CACHE_PATH
                   value: "/data"
-              securityContext:
-                privileged: true
               volumeMounts:
               - name: gcs-fuse-csi-ephemeral
                 mountPath: /data

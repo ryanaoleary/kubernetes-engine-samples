@@ -70,8 +70,6 @@ spec:
                 secretKeyRef:
                   name: hf-secret
                   key: hf_api_token
-            securityContext:
-              privileged: true
             volumeMounts:
             - name: gcs-fuse-csi-ephemeral
               mountPath: /data
@@ -93,7 +91,7 @@ spec:
     workerGroupSpecs:
     - replicas: 2
       minReplicas: 1
-      maxReplicas: 1
+      maxReplicas: 2
       numOfHosts: 1
       groupName: tpu-group
       rayStartParams: {}
@@ -126,8 +124,6 @@ spec:
                 google.com/tpu: "8"
                 ephemeral-storage: 50Gi
                 memory: 100G
-                        securityContext:
-              privileged: true
             volumeMounts:
             - name: gcs-fuse-csi-ephemeral
               mountPath: /data
