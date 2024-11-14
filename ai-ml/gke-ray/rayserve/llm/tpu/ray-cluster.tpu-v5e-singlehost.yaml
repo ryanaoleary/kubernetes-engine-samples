@@ -111,10 +111,6 @@ spec:
                 ephemeral-storage: 80G
                 memory: 200G
             env:
-              - name: MODEL_ID
-                value: "mistralai/Mistral-7B-Instruct-v0.3"
-              - name: TOKENIZER_MODE
-                value: "mistral"
               - name: VLLM_XLA_CACHE_PATH
                 value: "/data"
               - name: HUGGING_FACE_HUB_TOKEN
