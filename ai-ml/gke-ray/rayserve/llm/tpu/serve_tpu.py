@@ -37,17 +37,18 @@ app = FastAPI()
 class VLLMDeployment:
     def __init__(
         self,
+        model_id,
         num_tpu_chips,
         max_model_len,
         tokenizer_mode,
         dtype,
     ):
         self.llm = LLM(
-            model=os.environ['MODEL_ID'], # Error if not provided.
+            model=model_id,
             tensor_parallel_size=num_tpu_chips,
             max_model_len=max_model_len,
             dtype=dtype,
-            download_dir=os.environ['VLLM_XLA_CACHE_PATH'],
+            download_dir=os.environ['VLLM_XLA_CACHE_PATH'],  # Error if not provided.
             tokenizer_mode=tokenizer_mode,
             enforce_eager=True,
         )
@@ -106,7 +107,9 @@ def get_dtype() -> str:
 
 def build_app(cli_args: Dict[str, str]) -> serve.Application:
     """Builds the Serve app based on CLI arguments."""
-    ray.init(ignore_reinit_error=True)
+    ray.init(ignore_reinit_error=True, address="ray://localhost:10001")
+
+    model_id = os.environ['MODEL_ID']
 
     num_tpu_chips = get_num_tpu_chips()
     pg_resources = []
@@ -117,6 +120,6 @@ def build_app(cli_args: Dict[str, str]) -> serve.Application:
     # Use PACK strategy since the deployment may use more than one TPU node.
     return VLLMDeployment.options(
         placement_group_bundles=pg_resources,
-        placement_group_strategy="PACK").bind(num_tpu_chips, get_max_model_len(), get_tokenizer_mode(), get_dtype())
+        placement_group_strategy="PACK").bind(model_id, num_tpu_chips, get_max_model_len(), get_tokenizer_mode(), get_dtype())
 
 model = build_app({})
