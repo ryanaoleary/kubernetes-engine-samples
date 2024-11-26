@@ -64,9 +64,9 @@ spec:
                 image: rayproject/ray:2.37.0
                 resources:
                   limits:
-                    cpu: "3"
+                    cpu: "4"
                     memory: "8Gi"
                   requests:
-                    cpu: "3"
+                    cpu: "4"
                     memory: "8Gi"
 # [END gke_ai_ml_gke_ray_raytrain_pytorch_mnist_rayjob]
