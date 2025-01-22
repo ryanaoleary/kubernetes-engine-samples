@@ -45,7 +45,6 @@ class VLLMDeployment:
         self.llm = LLM(
             model=os.environ["MODEL_ID"],
             served_model_name=os.environ["MODEL_NAME"],
-            download_dir="/data",
             tensor_parallel_size=num_tpu_chips,
             max_model_len=max_model_len,
             dtype=dtype,
