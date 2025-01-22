@@ -43,8 +43,8 @@ class VLLMDeployment:
         dtype,
     ):
         self.llm = LLM(
-            model="/data/Meta-Llama-3.1-405B-Instruct", # Error if not provided.
-            served_model_name="meta-llama/Meta-Llama-3.1-405B-Instruct",
+            model=os.Environ["MODEL_ID"], # Error if not provided.
+            download_dir="/data",
             tensor_parallel_size=num_tpu_chips,
             max_model_len=max_model_len,
             dtype=dtype,
