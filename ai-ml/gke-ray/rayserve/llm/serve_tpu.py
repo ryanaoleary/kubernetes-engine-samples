@@ -43,11 +43,11 @@ class VLLMDeployment:
         dtype,
     ):
         self.llm = LLM(
-            model=os.environ["MODEL_ID"], # Error if not provided.
-            download_dir="/data",
+            model=os.environ["MODEL_ID"],
             tensor_parallel_size=num_tpu_chips,
             max_model_len=max_model_len,
             dtype=dtype,
+            download_dir=os.environ['VLLM_XLA_CACHE_PATH'],  # Error if not provided.
             tokenizer_mode=tokenizer_mode,
             enforce_eager=True,
         )
