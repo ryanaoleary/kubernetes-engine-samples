@@ -49,6 +49,7 @@ class VLLMDeployment:
             dtype=dtype,
             tokenizer_mode=tokenizer_mode,
             enforce_eager=True,
+            config_format="hf",
         )
 
     @app.post("/v1/generate")
