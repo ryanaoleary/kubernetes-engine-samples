@@ -43,8 +43,8 @@ class VLLMDeployment:
         dtype,
     ):
         self.llm = LLM(
-            model="/data/Meta-Llama-3.1-405B-Instruct",
-            served_model_name="meta-llama/Meta-Llama-3.1-405B-Instruct",
+            model=os.environ["MODEL_ID"],
+            served_model_name=os.environ["MODEL_NAME"],
             tensor_parallel_size=num_tpu_chips,
             max_model_len=max_model_len,
             dtype=dtype,
