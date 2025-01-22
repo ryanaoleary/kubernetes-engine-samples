@@ -43,7 +43,7 @@ class VLLMDeployment:
         dtype,
     ):
         self.llm = LLM(
-            model=os.Environ["MODEL_ID"], # Error if not provided.
+            model=os.environ["MODEL_ID"], # Error if not provided.
             download_dir="/data",
             tensor_parallel_size=num_tpu_chips,
             max_model_len=max_model_len,
