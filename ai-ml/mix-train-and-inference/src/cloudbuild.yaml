@@ -1,4 +1,3 @@
-#!/bin/sh
 # Copyright 2024 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,8 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
-cd gke-platform
-sed -ie 's/"deletion_protection": true/"deletion_protection": false/g' terraform.tfstate
-terraform destroy --auto-approve
-cd -
+images:
+- ${_DESTINATION}
+options:
+  logging: CLOUD_LOGGING_ONLY
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  args:
+  - build
+  - -t
+  - ${_DESTINATION}
+  - .

@@ -1,4 +1,4 @@
-# Copyright 2024 Google LLC
+# Copyright 2025 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# [START gke_ai_ml_llm_serving_multihost_gpus_vllm_llama3_405b_a4]
+# [START gke_ai_ml_llm_serving_multihost_gpus_vllm_deepseek_r1_a3]
 
 apiVersion: leaderworkerset.x-k8s.io/v1
 kind: LeaderWorkerSet
@@ -43,7 +43,7 @@ spec:
               - sh
               - -c
               - "/vllm-workspace/ray_init.sh leader --ray_cluster_size=$(LWS_GROUP_SIZE); 
-                python3 -m vllm.entrypoints.openai.api_server --port 8080 --model meta-llama/Meta-Llama-3.1-405B-Instruct --tensor-parallel-size 8 --pipeline-parallel-size 2"
+                python3 -m vllm.entrypoints.openai.api_server --port 8080 --model deepseek-ai/DeepSeek-R1 --tensor-parallel-size 16 --trust-remote-code --max-model-len 4096"
             resources:
               limits:
                 nvidia.com/gpu: "8"
@@ -106,4 +106,4 @@ spec:
     role: leader
   type: ClusterIP
 
-  # [END gke_ai_ml_llm_serving_multihost_gpus_vllm_llama3_405b_a4]
+  # [END gke_ai_ml_llm_serving_multihost_gpus_vllm_deepseek_r1_a3]
