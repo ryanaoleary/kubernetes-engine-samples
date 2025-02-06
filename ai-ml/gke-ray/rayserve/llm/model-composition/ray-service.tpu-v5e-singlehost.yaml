@@ -117,12 +117,12 @@ spec:
               limits:
                 cpu: "100"
                 google.com/tpu: "8"
-                ephemeral-storage: 50Gi
+                ephemeral-storage: 40G
                 memory: 100G
               requests:
                 cpu: "100"
                 google.com/tpu: "8"
-                ephemeral-storage: 50Gi
+                ephemeral-storage: 40G
                 memory: 100G
             volumeMounts:
             - name: gcs-fuse-csi-ephemeral
