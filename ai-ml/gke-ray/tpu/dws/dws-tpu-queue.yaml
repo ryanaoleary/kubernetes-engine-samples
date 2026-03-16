@@ -1,0 +1,73 @@
+apiVersion: kueue.x-k8s.io/v1beta1
+    kind: ResourceFlavor
+    metadata:
+      name: "on-demand"
+    spec:
+      nodeLabels:
+        cloud.google.com/gke-nodepool: ${ONDEMAND_NODEPOOL}
+    ---
+    apiVersion: kueue.x-k8s.io/v1beta1
+    kind: ResourceFlavor
+    metadata:
+      name: "dws"
+    spec:
+      nodeLabels:
+        cloud.google.com/gke-nodepool: ${DWS_NODEPOOL}
+    ---
+    apiVersion: kueue.x-k8s.io/v1beta1
+    kind: ClusterQueue
+    metadata:
+      name: "cluster-queue"
+    spec:
+      namespaceSelector: {}
+      resourceGroups:
+        - coveredResources: ["cpu", "memory", "google.com/tpu"]
+          flavors:
+            - name: "on-demand" # First choice: on-demand node-pool.
+              resources:
+                - name: "cpu"
+                  nominalQuota: 9
+                - name: "memory"
+                  nominalQuota: 36Gi
+                - name: "google.com/tpu"
+                  nominalQuota: 16
+            - name: "dws" # If on-demand is unavailable, fallback to DWS.
+              resources:
+                - name: "cpu"
+                  nominalQuota: 1000000000
+                - name: "memory"
+                  nominalQuota: 1000000000Gi
+                - name: "google.com/tpu"
+                  nominalQuota: 1000000000 # "Infinite" quota
+      admissionChecksStrategy:
+        admissionChecks:
+          - name: "dws-prov"
+            onFlavors: [dws]
+    ---
+    apiVersion: kueue.x-k8s.io/v1beta1
+    kind: LocalQueue
+    metadata:
+      namespace: "default"
+      name: "user-queue"
+    spec:
+      clusterQueue: "cluster-queue"
+    ---
+    apiVersion: kueue.x-k8s.io/v1beta1
+    kind: AdmissionCheck
+    metadata:
+      name: dws-prov
+    spec:
+      controllerName: kueue.x-k8s.io/provisioning-request
+      parameters:
+        apiGroup: kueue.x-k8s.io
+        kind: ProvisioningRequestConfig
+        name: dws-config
+    ---
+    apiVersion: kueue.x-k8s.io/v1beta1
+    kind: ProvisioningRequestConfig
+    metadata:
+      name: dws-config
+    spec:
+      provisioningClassName: queued-provisioning.gke.io
+      managedResources:
+        - google.com/tpu
