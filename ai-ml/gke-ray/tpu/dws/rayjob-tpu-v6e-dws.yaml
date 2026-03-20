@@ -34,6 +34,8 @@ spec:
       rayStartParams: {}
       template:
         spec:
+          nodeSelector:
+            cloud.google.com/gke-nodepool: default-pool
           containers:
             - name: ray-head
               image: rayproject/ray:2.53.0-py311
