@@ -41,9 +41,9 @@ spec:
         - name: "on-demand" # First choice: on-demand node-pool.
           resources:
             - name: "cpu"
-              nominalQuota: 9
+              nominalQuota: 40
             - name: "memory"
-              nominalQuota: 36Gi
+              nominalQuota: 75Gi
             - name: "google.com/tpu"
               nominalQuota: 16
         - name: "dws" # If on-demand is unavailable, fallback to DWS.
