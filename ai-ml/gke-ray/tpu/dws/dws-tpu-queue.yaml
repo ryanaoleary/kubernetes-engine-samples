@@ -18,7 +18,8 @@ kind: ResourceFlavor
 metadata:
   name: "default-cpu"
 spec:
-  nodeLabels: {}
+  nodeLabels:
+    cloud.google.com/gke-nodepool: default-pool
 ---
 apiVersion: kueue.x-k8s.io/v1beta1
 kind: ResourceFlavor
