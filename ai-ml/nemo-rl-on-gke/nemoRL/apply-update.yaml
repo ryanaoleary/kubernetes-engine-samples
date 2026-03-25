@@ -1,0 +1,32 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  annotations:
+    components.gke.io/component-name: lustrecsi
+    components.gke.io/component-version: 0.1.17
+    components.gke.io/layer: addon
+  labels:
+    k8s-app: lustre-csi-driver
+  name: lustre-rl
+
+parameters:
+  network: projects/northam-ce-mlai-tpu/global/networks/pmotgi-b200-gke-net-0
+  perUnitStorageThroughput: "500"
+provisioner: lustre.csi.storage.gke.io
+reclaimPolicy: Delete
+volumeBindingMode: Immediate
+
