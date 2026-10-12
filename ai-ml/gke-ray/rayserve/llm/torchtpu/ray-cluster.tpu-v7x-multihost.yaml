@@ -21,7 +21,6 @@ spec:
   rayVersion: "2.58.0"
   headGroupSpec:
     rayStartParams:
-      # Prevents Ray from scheduling LLMServer replicas onto the CPU-only head Pod.
       num-cpus: "0"
     template:
       spec:
@@ -29,18 +28,17 @@ spec:
         - name: ray-head
           image: ${IMAGE_URI}
           env:
+          - name: HF_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: hf-secret
+                key: hf_api_token
           - name: RAY_TPU_RESOURCE_PER_CHIP
             value: "2"
           - name: ACCELERATOR_TYPE
             value: "TPU-V7X"
           - name: TPU_TOPOLOGY
             value: "2x2x2"
-          - name: HF_TOKEN
-            valueFrom:
-              secretKeyRef:
-                name: hf-secret
-                key: hf_api_token
-                optional: true
           ports:
           - containerPort: 6379
             name: gcs
@@ -60,8 +58,6 @@ spec:
   workerGroupSpecs:
   - groupName: tpu7x-16
     replicas: 1
-    minReplicas: 1
-    maxReplicas: 1
     numOfHosts: 2
     resources:
       # Advertises 8 logical TPU cores (2 chiplets per physical chip) per host.
@@ -72,20 +68,21 @@ spec:
         - name: ray-worker
           image: ${IMAGE_URI}
           env:
+          - name: HF_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: hf-secret
+                key: hf_api_token
           - name: RAY_TPU_RESOURCE_PER_CHIP
             value: "2"
+          - name: RAY_EXPERIMENTAL_NOSET_TPU_VISIBLE_CHIPS
+            value: "1"
           - name: NODE_IP
             valueFrom:
               fieldRef:
                 fieldPath: status.hostIP
           - name: VBAR_CONTROL_SERVICE_URL
             value: "$(NODE_IP):8353"
-          - name: HF_TOKEN
-            valueFrom:
-              secretKeyRef:
-                name: hf-secret
-                key: hf_api_token
-                optional: true
           resources:
             limits:
               cpu: "64"

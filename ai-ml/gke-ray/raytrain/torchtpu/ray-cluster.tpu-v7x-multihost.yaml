@@ -21,7 +21,6 @@ spec:
   rayVersion: "2.58.0"
   headGroupSpec:
     rayStartParams:
-      # Prevents Ray from scheduling TPU workloads onto the CPU-only head Pod.
       num-cpus: "0"
     template:
       spec:
@@ -53,8 +52,6 @@ spec:
   workerGroupSpecs:
   - groupName: tpu7x-16
     replicas: 1
-    minReplicas: 1
-    maxReplicas: 1
     numOfHosts: 2
     resources:
       # Advertises 8 logical TPU cores (2 chiplets per physical chip) per host.
@@ -72,6 +69,8 @@ spec:
                 key: hf_api_token
           - name: RAY_TPU_RESOURCE_PER_CHIP
             value: "2"
+          - name: RAY_EXPERIMENTAL_NOSET_TPU_VISIBLE_CHIPS
+            value: "1"
           - name: NODE_IP
             valueFrom:
               fieldRef:
@@ -80,12 +79,12 @@ spec:
             value: "$(NODE_IP):8353"
           resources:
             limits:
-              cpu: "24"
-              memory: "160Gi"
+              cpu: "64"
+              memory: "250Gi"
               google.com/tpu: "4"
             requests:
-              cpu: "24"
-              memory: "160Gi"
+              cpu: "64"
+              memory: "250Gi"
               google.com/tpu: "4"
           volumeMounts:
           - mountPath: /dev/shm
@@ -94,7 +93,7 @@ spec:
         - name: dshm
           emptyDir:
             medium: Memory
-            sizeLimit: 64Gi
+            sizeLimit: 128Gi
         nodeSelector:
           cloud.google.com/gke-tpu-accelerator: tpu7x
           cloud.google.com/gke-tpu-topology: 2x2x2

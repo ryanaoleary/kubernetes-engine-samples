@@ -30,17 +30,20 @@ from ray.train import (
 )
 from ray.train.torch import TorchConfig, TorchTrainer
 import torch
-from torch.distributed import ReduceOp, all_reduce
+from torch.distributed import ReduceOp, all_reduce, barrier
 from torch.distributed.checkpoint.state_dict import (
     StateDictOptions,
     get_model_state_dict,
 )
-from torch.distributed.device_mesh import DeviceMesh, init_device_mesh
+from torch.distributed.device_mesh import init_device_mesh
 from torch.distributed.fsdp import MixedPrecisionPolicy, fully_shard
-from torch.distributed.tensor import DTensor
 from torch.utils.data import DataLoader
 import torch_tpu
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import (
+    AutoModelForCausalLM,
+    AutoTokenizer,
+    DataCollatorForLanguageModeling,
+)
 
 
 def build_alpaca_dataloader(
@@ -54,54 +57,28 @@ def build_alpaca_dataloader(
     raw_dataset = load_dataset(dataset_name, split=f"train[:{max_samples}]")
 
     def format_and_tokenize(batch: dict) -> dict:
-        prompts = []
-        for instruction, inp, output in zip(
-            batch["instruction"], batch["input"], batch["output"]
-        ):
-            if inp:
-                text = (
-                    f"### Instruction:\n{instruction}\n\n"
-                    f"### Input:\n{inp}\n\n"
-                    f"### Response:\n{output}"
-                )
-            else:
-                text = (
-                    f"### Instruction:\n{instruction}\n\n"
-                    f"### Response:\n{output}"
-                )
-            prompts.append(text)
-        encoded = tokenizer(
+        prompts = [
+            (
+                f"### Instruction:\n{instruction}\n\n### Input:\n{inp}\n\n### Response:\n{output}"
+                if inp
+                else f"### Instruction:\n{instruction}\n\n### Response:\n{output}"
+            )
+            for instruction, inp, output in zip(
+                batch["instruction"], batch["input"], batch["output"]
+            )
+        ]
+        return tokenizer(
             prompts,
             truncation=True,
             max_length=max_seq_len,
             padding="max_length",
         )
-        encoded["labels"] = [
-            [
-                tok if mask == 1 else -100
-                for tok, mask in zip(seq, mask_seq)
-            ]
-            for seq, mask_seq in zip(
-                encoded["input_ids"], encoded["attention_mask"]
-            )
-        ]
-        return encoded
 
     tokenized_dataset = raw_dataset.map(
         format_and_tokenize,
         batched=True,
         remove_columns=raw_dataset.column_names,
     )
-
-    def collate_batch(examples: list[dict]) -> dict[str, torch.Tensor]:
-        return {
-            "input_ids": torch.tensor(
-                [ex["input_ids"] for ex in examples], dtype=torch.long
-            ),
-            "labels": torch.tensor(
-                [ex["labels"] for ex in examples], dtype=torch.long
-            ),
-        }
 
     # Leave DataLoader num_workers=0 because Linux fork can deadlock after the
     # TPU runtime and Ray gRPC threads initialize.
@@ -110,7 +87,9 @@ def build_alpaca_dataloader(
         batch_size=batch_size_per_device,
         shuffle=True,
         drop_last=True,
-        collate_fn=collate_batch,
+        collate_fn=DataCollatorForLanguageModeling(
+            tokenizer=tokenizer, mlm=False
+        ),
     )
     return ray.train.torch.prepare_data_loader(dataloader)
 
@@ -118,34 +97,15 @@ def build_alpaca_dataloader(
 def shard_model_fsdp2(
     model: torch.nn.Module,
     world_size: int,
-    num_slices: int,
-) -> tuple[torch.nn.Module, DeviceMesh]:
-    """Shards a causal LM across one or more TPU slices using PyTorch FSDP2."""
-    if num_slices > 1:
-        # 2D Hybrid Sharding: shard parameters over ICI within each slice and
-        # replicate/reduce gradients across slices over DCN.
-        mesh = init_device_mesh(
-            "tpu",
-            (num_slices, world_size // num_slices),
-            mesh_dim_names=("dp_replicate", "dp_shard"),
-        )
-    else:
-        mesh = init_device_mesh("tpu", (world_size,))
-
+) -> None:
+    """Shards a causal LM across a TPU slice using PyTorch FSDP2."""
+    mesh = init_device_mesh("tpu", (world_size,))
     mp_policy = MixedPrecisionPolicy(
         param_dtype=torch.bfloat16,
         reduce_dtype=torch.float32,
     )
-    # Prune unused multimodal towers and freeze per-layer embeddings on Gemma 4.
-    for attr in ("vision_tower", "audio_tower", "embed_vision", "embed_audio"):
-        if hasattr(model.model, attr):
-            delattr(model.model, attr)
-
-    text_model = getattr(model.model, "language_model", model.model)
-    ignored_params = set()
-    if hasattr(text_model, "embed_tokens_per_layer"):
-        text_model.embed_tokens_per_layer.requires_grad_(False)
-        ignored_params.update(text_model.embed_tokens_per_layer.parameters())
+    text_model = model.model.language_model
+    text_model.embed_tokens_per_layer.requires_grad_(False)
 
     for layer in text_model.layers:
         fully_shard(layer.mlp, mesh=mesh, mp_policy=mp_policy)
@@ -153,9 +113,8 @@ def shard_model_fsdp2(
         model,
         mesh=mesh,
         mp_policy=mp_policy,
-        ignored_params=ignored_params,
+        ignored_params=set(text_model.embed_tokens_per_layer.parameters()),
     )
-    return model, mesh
 
 
 def train_func(config: dict) -> None:
@@ -172,9 +131,6 @@ def train_func(config: dict) -> None:
     num_epochs = config["num_epochs"]
 
     tokenizer = AutoTokenizer.from_pretrained(model_id)
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
-
     dataloader = build_alpaca_dataloader(
         tokenizer=tokenizer,
         dataset_name=dataset_name,
@@ -184,11 +140,13 @@ def train_func(config: dict) -> None:
     )
 
     torch.manual_seed(42)
-    base_model = AutoModelForCausalLM.from_pretrained(
+    model = AutoModelForCausalLM.from_pretrained(
         model_id,
         dtype=torch.bfloat16,
+        vision_config=None,
+        audio_config=None,
     )
-    base_model.config.use_cache = False
+    model.config.get_text_config().use_cache = False
 
     start_epoch = 0
     checkpoint = ray.train.get_checkpoint()
@@ -198,18 +156,20 @@ def train_func(config: dict) -> None:
                 os.path.join(checkpoint_dir, "model.pt"),
                 map_location="cpu",
             )
-            base_model.load_state_dict(ckpt["model_state_dict"], strict=False)
+            model.load_state_dict(ckpt["model_state_dict"], strict=False)
             start_epoch = ckpt["epoch"]
+        if world_rank == 0:
+            print(
+                f"[Rank 0/{world_size}] Resumed from checkpoint at epoch {start_epoch}"
+            )
 
-    base_model = base_model.to(device)
-    model, _ = shard_model_fsdp2(
-        model=base_model,
+    model = model.to(device)
+    shard_model_fsdp2(
+        model=model,
         world_size=world_size,
-        num_slices=config["num_slices"],
     )
-    trainable_params = [p for p in model.parameters() if p.requires_grad]
     optimizer = torch.optim.AdamW(
-        trainable_params,
+        model.parameters(),
         lr=config["learning_rate"],
         weight_decay=config["weight_decay"],
     )
@@ -223,16 +183,14 @@ def train_func(config: dict) -> None:
         )
 
     for epoch in range(start_epoch, num_epochs):
-        if world_size > 1:
-            dataloader.sampler.set_epoch(epoch)
-
+        dataloader.sampler.set_epoch(epoch)
         model.train()
         epoch_start = time.perf_counter()
         running_loss = torch.zeros(1, device=device, dtype=torch.float32)
         num_steps = 0
 
         for batch in dataloader:
-            optimizer.zero_grad(set_to_none=True)
+            optimizer.zero_grad()
             with torch.nn.attention.sdpa_kernel(
                 [torch.nn.attention.SDPBackend.OVERRIDEABLE]
             ):
@@ -269,18 +227,14 @@ def train_func(config: dict) -> None:
                 f"steps={num_steps} | global_batch_size={global_batch_size}"
             )
 
-        sharded_sd = get_model_state_dict(
+        full_state_dict = get_model_state_dict(
             model,
-            options=StateDictOptions(ignore_frozen_params=True),
+            options=StateDictOptions(
+                full_state_dict=True,
+                cpu_offload=True,
+                ignore_frozen_params=True,
+            ),
         )
-        full_state_dict = {}
-        for k, v in sharded_sd.items():
-            full_param = (
-                v.full_tensor().cpu() if isinstance(v, DTensor) else v.cpu()
-            )
-            if world_rank == 0:
-                full_state_dict[k] = full_param
-
         with tempfile.TemporaryDirectory() as temp_checkpoint_dir:
             checkpoint = None
             if world_rank == 0:
@@ -293,7 +247,9 @@ def train_func(config: dict) -> None:
                     os.path.join(temp_checkpoint_dir, "model.pt"),
                 )
                 checkpoint = Checkpoint.from_directory(temp_checkpoint_dir)
+            del full_state_dict
             ray.train.report(metrics, checkpoint=checkpoint)
+            barrier()
 
 
 def parse_args() -> argparse.Namespace:
@@ -328,13 +284,7 @@ def parse_args() -> argparse.Namespace:
         "--num-workers",
         type=int,
         default=16,
-        help="Total number of TPU worker processes across all slices.",
-    )
-    parser.add_argument(
-        "--num-slices",
-        type=int,
-        default=1,
-        help="Number of TPU slices (>1 enables 2D FSDP2 hybrid sharding).",
+        help="Total TPU worker processes across the slice.",
     )
     parser.add_argument("--num-epochs", type=int, default=3)
     parser.add_argument("--batch-size-per-device", type=int, default=2)
@@ -346,7 +296,7 @@ def parse_args() -> argparse.Namespace:
         "--max-failures",
         type=int,
         default=0,
-        help="Maximum automatic controller restarts on worker or slice preemption.",
+        help="Maximum automatic controller restarts on worker failure.",
     )
     parser.add_argument(
         "--storage-path",
@@ -367,7 +317,7 @@ def main() -> None:
         f"Starting Ray Train FSDP2 SFT job: model={args.model_id}, "
         f"dataset={args.dataset_name}, topology={args.topology}, "
         f"accelerator_type={args.accelerator_type}, "
-        f"num_workers={args.num_workers}, num_slices={args.num_slices}"
+        f"num_workers={args.num_workers}"
     )
 
     trainer = TorchTrainer(
@@ -381,7 +331,6 @@ def main() -> None:
             "max_samples": args.max_samples,
             "learning_rate": args.learning_rate,
             "weight_decay": args.weight_decay,
-            "num_slices": args.num_slices,
         },
         torch_config=TorchConfig(backend="tpu_dist"),
         scaling_config=ScalingConfig(

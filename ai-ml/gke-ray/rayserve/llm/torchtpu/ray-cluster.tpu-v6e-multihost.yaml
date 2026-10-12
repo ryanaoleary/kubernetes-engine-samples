@@ -21,7 +21,6 @@ spec:
   rayVersion: "2.58.0"
   headGroupSpec:
     rayStartParams:
-      # Prevents Ray from scheduling LLMServer replicas onto the CPU-only head Pod.
       num-cpus: "0"
     template:
       spec:
@@ -34,7 +33,6 @@ spec:
               secretKeyRef:
                 name: hf-secret
                 key: hf_api_token
-                optional: true
           ports:
           - containerPort: 6379
             name: gcs
@@ -54,8 +52,6 @@ spec:
   workerGroupSpecs:
   - groupName: v6e-16
     replicas: 1
-    minReplicas: 1
-    maxReplicas: 1
     numOfHosts: 4
     template:
       spec:
@@ -68,7 +64,6 @@ spec:
               secretKeyRef:
                 name: hf-secret
                 key: hf_api_token
-                optional: true
           resources:
             limits:
               cpu: "64"

@@ -14,11 +14,14 @@
 
 # [START gke_ai_ml_gke_ray_raytrain_torchtpu_ray_core_collectives]
 import argparse
-import math
 import os
 
 import ray
-from ray.util.tpu import run_on_slice, slice_placement_group
+from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
+from ray.util.tpu import (
+    get_tpu_version_from_type,
+    slice_placement_group,
+)
 import torch
 import torch.distributed as dist
 from torch.distributed.device_mesh import init_device_mesh
@@ -41,9 +44,6 @@ class FeedForward(nn.Module):
         self.w1 = nn.Linear(hidden_dim, 4 * hidden_dim, bias=False)
         self.act = nn.SiLU()
         self.w2 = nn.Linear(4 * hidden_dim, hidden_dim, bias=False)
-        with torch.no_grad():
-            self.w1.weight.normal_(std=1.0 / math.sqrt(hidden_dim))
-            self.w2.weight.normal_(std=1.0 / math.sqrt(4 * hidden_dim))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return x + self.w2(self.act(self.w1(x)))
@@ -53,63 +53,64 @@ class FeedForward(nn.Module):
 class TorchTPUSliceWorker:
     """Ray actor bound to a single logical TPU device within a slice placement group."""
 
-    def __init__(
-        self,
-        env_vars_by_rank: list[dict[str, str]],
-        devices_per_host: int,
-    ):
+    def __init__(self, devices_per_host: int):
         self.node_ip = ray.util.get_node_ip_address()
-        hosts = env_vars_by_rank[0]["TPU_WORKER_HOSTNAMES"].split(",")
-        self.worker_id = hosts.index(self.node_ip)
-        tpu_ids = ray.get_runtime_context().get_accelerator_ids().get("TPU", ["0"])
-        self.local_rank = int(tpu_ids[0])
+        hosts = os.environ["TPU_WORKER_HOSTNAMES"].split(",")
+        self.worker_id = (
+            int(os.environ["TPU_WORKER_ID"])
+            if "TPU_WORKER_ID" in os.environ
+            else hosts.index(self.node_ip)
+        )
+        self.local_rank = int(
+            ray.get_runtime_context().get_accelerator_ids()["TPU"][0]
+        )
         self.rank = self.worker_id * devices_per_host + self.local_rank
-        os.environ.update(env_vars_by_rank[self.rank])
+        os.environ.update(
+            {
+                "MASTER_ADDR": hosts[0],
+                "MASTER_PORT": "29500",
+                "WORLD_SIZE": str(len(hosts) * devices_per_host),
+                "RANK": str(self.rank),
+                "LOCAL_RANK": str(self.local_rank),
+                "LOCAL_WORLD_SIZE": str(devices_per_host),
+            }
+        )
 
     def run_tensor_parallel_step(
         self,
         batch_size: int = 64,
         hidden_dim: int = 128,
     ) -> dict:
-        if not dist.is_initialized():
-            dist.init_process_group(backend="tpu_dist")
-
+        dist.init_process_group(backend="tpu_dist")
         world_size = dist.get_world_size()
         device = torch.device("tpu")
 
-        # 1. Compute single-device reference output on CPU (rank 0) with identical seed.
+        # 1. Compute single-device reference output on CPU with identical seed.
         torch.manual_seed(RANDOM_SEED)
         ref_model = FeedForward(hidden_dim).eval()
         inputs_cpu = torch.randn(batch_size, hidden_dim)
         with torch.no_grad():
-            ref_output = ref_model(inputs_cpu) if self.rank == 0 else None
+            ref_output = ref_model(inputs_cpu)
 
         # 2. Shard the model across all TPU devices in the slice with DTensor TP.
         torch.manual_seed(RANDOM_SEED)
         tp_model = FeedForward(hidden_dim).to(device).eval()
         mesh = init_device_mesh("tpu", (world_size,))
-        tp_plan = {
-            "w1": ColwiseParallel(),
-            "w2": RowwiseParallel(),
-        }
         tp_model = parallelize_module(
             tp_model,
             mesh,
-            tp_plan,
-            src_data_rank=0,
+            {"w1": ColwiseParallel(), "w2": RowwiseParallel()},
         )
 
         with torch.no_grad():
             tp_output = tp_model(inputs_cpu.to(device)).cpu()
 
-        max_abs_diff = 0.0
-        if self.rank == 0 and ref_output is not None:
-            torch.testing.assert_close(tp_output, ref_output, rtol=1e-3, atol=1e-2)
-            max_abs_diff = float((tp_output - ref_output).abs().max().item())
+        torch.testing.assert_close(tp_output, ref_output, rtol=1e-3, atol=1e-2)
+        max_abs_diff = float((tp_output - ref_output).abs().max().item())
 
         # 3. Verify direct ICI all_reduce across all ranks in the slice.
-        rank_tensor = torch.ones((4,), dtype=torch.float32, device=device) * (
-            self.rank + 1
+        rank_tensor = torch.full(
+            (4,), float(self.rank + 1), dtype=torch.float32, device=device
         )
         dist.all_reduce(rank_tensor, op=dist.ReduceOp.SUM)
         all_reduce_sum = rank_tensor.cpu().tolist()
@@ -148,10 +149,9 @@ def main() -> None:
     args = parse_args()
     ray.init()
 
-    accelerator_version = args.accelerator_type.upper().removeprefix("TPU-").lower()
     slice_handle = slice_placement_group(
         topology=args.topology,
-        accelerator_version=accelerator_version,
+        accelerator_version=get_tpu_version_from_type(args.accelerator_type),
         num_slices=1,
         resources_per_bundle={"TPU": 1},
     )
@@ -164,16 +164,17 @@ def main() -> None:
         f"num_hosts={slice_handle.num_hosts}"
     )
 
-    env_vars_by_rank = [
-        slice_handle.get_torchtpu_env_vars(rank=r)
-        for r in range(slice_handle.num_bundles)
+    devices_per_host = slice_handle.num_bundles // slice_handle.num_hosts
+    workers = [
+        TorchTPUSliceWorker.options(
+            resources={"TPU": 1},
+            scheduling_strategy=PlacementGroupSchedulingStrategy(
+                placement_group=slice_handle.placement_group,
+                placement_group_bundle_index=bundle_idx,
+            ),
+        ).remote(devices_per_host)
+        for bundle_idx in range(slice_handle.num_bundles)
     ]
-    workers = run_on_slice(
-        TorchTPUSliceWorker,
-        env_vars_by_rank,
-        slice_handle.devices_per_host,
-        tpu_slice=slice_handle,
-    )
     results = sorted(
         ray.get([w.run_tensor_parallel_step.remote() for w in workers]),
         key=lambda r: r["rank"],
