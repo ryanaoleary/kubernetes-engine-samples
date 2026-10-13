@@ -52,10 +52,9 @@ def app(args: dict[str, str]) -> Application:
         runtime_env={
             "env_vars": {
                 "TPU_MULTIHOST_BACKEND": "ray",
-                "VLLM_XLA_CACHE_PATH": "/tmp/xla_cache",
                 # Execute Gemma 4 routed expert layers on TPU TensorCores instead of SparseCore.
                 "USE_MOE_SPARSE_CORE": "0",
-                "VLLM_RAY_EXTRA_ENV_VARS_TO_COPY": "USE_MOE_SPARSE_CORE,VLLM_XLA_CACHE_PATH",
+                "VLLM_RAY_EXTRA_ENV_VARS_TO_COPY": "USE_MOE_SPARSE_CORE",
             }
         },
     )
