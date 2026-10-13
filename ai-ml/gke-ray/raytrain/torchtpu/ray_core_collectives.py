@@ -133,13 +133,13 @@ def parse_args() -> argparse.Namespace:
         "--topology",
         type=str,
         default="4x4",
-        help="TPU physical topology (for example, '4x4' for v6e or '2x2x2' for TPU7x).",
+        help="TPU physical topology.",
     )
     parser.add_argument(
         "--accelerator-type",
         type=str,
         default="TPU-V6E",
-        help="Ray TPU accelerator type (for example, 'TPU-V6E' or 'TPU-V7X').",
+        help="Ray TPU accelerator type (TPU-V6E, TPU-V7X, etc.).",
     )
     return parser.parse_args()
 

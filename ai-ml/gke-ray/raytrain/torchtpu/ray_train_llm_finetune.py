@@ -48,11 +48,12 @@ from transformers import (
 def create_dataloader(
     tokenizer: AutoTokenizer,
     batch_size: int,
+    dataset_split: str = "train[:1024]",
     max_seq_len: int = 512,
 ) -> DataLoader:
     """Loads and tokenizes the Dolly 15k dataset for causal LM fine-tuning."""
     dataset = load_dataset(
-        "databricks/databricks-dolly-15k", split="train[:1024]"
+        "databricks/databricks-dolly-15k", split=dataset_split
     )
     tokenized = dataset.map(
         lambda x: tokenizer(
@@ -83,6 +84,7 @@ def train_func(config: dict) -> None:
     device = ray.train.torch.get_device()
 
     model_id = config["model_id"]
+    dataset_split = config["dataset_split"]
     batch_size = config["batch_size_per_device"]
     num_epochs = config["num_epochs"]
     max_seq_len = 512
@@ -91,6 +93,7 @@ def train_func(config: dict) -> None:
     dataloader = create_dataloader(
         tokenizer=tokenizer,
         batch_size=batch_size,
+        dataset_split=dataset_split,
         max_seq_len=max_seq_len,
     )
 
@@ -193,13 +196,13 @@ def parse_args() -> argparse.Namespace:
         "--topology",
         type=str,
         default="4x4",
-        help="TPU slice topology (for example, '4x4' on v6e or '2x2x2' on TPU7x).",
+        help="TPU slice topology.",
     )
     parser.add_argument(
         "--accelerator-type",
         type=str,
         default="TPU-V6E",
-        help="Ray TPU accelerator type ('TPU-V6E' or 'TPU-V7X').",
+        help="Ray TPU accelerator type (TPU-V6E, TPU-V7X, etc.).",
     )
     parser.add_argument(
         "--num-workers",
@@ -207,14 +210,30 @@ def parse_args() -> argparse.Namespace:
         default=16,
         help="Total TPU worker processes across the slice.",
     )
-    parser.add_argument("--num-epochs", type=int, default=3)
-    parser.add_argument("--batch-size-per-device", type=int, default=4)
+    parser.add_argument(
+        "--dataset-split",
+        type=str,
+        default="train[:1024]",
+        help="Hugging Face dataset split to load.",
+    )
+    parser.add_argument(
+        "--num-epochs",
+        type=int,
+        default=3,
+        help="Number of fine-tuning epochs.",
+    )
+    parser.add_argument(
+        "--batch-size-per-device",
+        type=int,
+        default=4,
+        help="Per-device training batch size.",
+    )
     parser.add_argument(
         "--storage-path",
         type=str,
         default=os.environ.get("STORAGE_PATH"),
         required="STORAGE_PATH" not in os.environ,
-        help="Cloud Storage ('gs://...') or shared file system path for checkpoints.",
+        help="Cloud Storage or shared file system path for checkpoints.",
     )
     return parser.parse_args()
 
@@ -234,6 +253,7 @@ def main() -> None:
         train_loop_per_worker=train_func,
         train_loop_config={
             "model_id": args.model_id,
+            "dataset_split": args.dataset_split,
             "num_epochs": args.num_epochs,
             "batch_size_per_device": args.batch_size_per_device,
         },
