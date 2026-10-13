@@ -31,7 +31,7 @@ from torch.distributed.tensor.parallel import (
     parallelize_module,
 )
 import torch.nn as nn
-import torch_tpu
+import torch_tpu  # noqa: F401
 
 RANDOM_SEED = 42
 
@@ -56,15 +56,14 @@ class TorchTPUSliceWorker:
     def __init__(self, devices_per_host: int):
         self.node_ip = ray.util.get_node_ip_address()
         hosts = os.environ["TPU_WORKER_HOSTNAMES"].split(",")
-        self.worker_id = (
-            int(os.environ["TPU_WORKER_ID"])
-            if "TPU_WORKER_ID" in os.environ
-            else hosts.index(self.node_ip)
-        )
+        self.worker_id = int(os.environ.get("TPU_WORKER_ID", "0"))
         self.local_rank = int(
             ray.get_runtime_context().get_accelerator_ids()["TPU"][0]
         )
         self.rank = self.worker_id * devices_per_host + self.local_rank
+        # Set per-process PyTorch env:// variables from the webhook's host-level
+        # TPU metadata and Ray's assigned local device ID (TorchTrainer sets these
+        # automatically in the Ray Train section below).
         os.environ.update(
             {
                 "MASTER_ADDR": hosts[0],
@@ -156,13 +155,6 @@ def main() -> None:
         resources_per_bundle={"TPU": 1},
     )
     ray.get(slice_handle.placement_group.ready())
-
-    print(
-        f"Reserved slice placement group: topology={args.topology}, "
-        f"accelerator_type={args.accelerator_type}, "
-        f"num_bundles={slice_handle.num_bundles}, "
-        f"num_hosts={slice_handle.num_hosts}"
-    )
 
     devices_per_host = slice_handle.num_bundles // slice_handle.num_hosts
     workers = [

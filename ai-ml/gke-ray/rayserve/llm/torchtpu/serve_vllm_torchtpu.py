@@ -13,8 +13,7 @@
 # limitations under the License.
 
 # [START gke_ai_ml_gke_ray_rayserve_llm_torchtpu_serve_vllm_torchtpu]
-import os
-
+from ray.serve.deployment import Application
 from ray.serve.llm import (
     LLMConfig,
     LLMServingArgs,
@@ -22,45 +21,43 @@ from ray.serve.llm import (
     build_openai_app,
 )
 
-# Model and TPU topology configuration
-MODEL_ID = os.environ.get("MODEL_ID", "google/gemma-4-26B-A4B-it")
-ACCELERATOR_TYPE = os.environ.get("ACCELERATOR_TYPE", "TPU-V6E")
-TPU_TOPOLOGY = os.environ.get("TPU_TOPOLOGY", "4x4")
 
-# vLLM engine arguments and defaults
-TENSOR_PARALLEL_SIZE = int(os.environ.get("TENSOR_PARALLEL_SIZE", "16"))
-MAX_MODEL_LEN = int(os.environ.get("MAX_MODEL_LEN", "8192"))
-MAX_NUM_BATCHED_TOKENS = int(os.environ.get("MAX_NUM_BATCHED_TOKENS", "4096"))
-
-llm_config = LLMConfig(
-    model_loading_config=ModelLoadingConfig(
-        model_id=MODEL_ID,
-    ),
-    accelerator_type=ACCELERATOR_TYPE,
-    accelerator_config={
-        "kind": "tpu",
-        "topology": TPU_TOPOLOGY,
-    },
-    placement_group_config={
-        "bundle_per_worker": {"TPU": 1},
-    },
-    engine_kwargs={
-        "tensor_parallel_size": TENSOR_PARALLEL_SIZE,
-        "enable_expert_parallel": True,
-        "language_model_only": True,
-        "disable_hybrid_kv_cache_manager": True,
-        "max_model_len": MAX_MODEL_LEN,
-        "max_num_batched_tokens": MAX_NUM_BATCHED_TOKENS,
-    },
-    runtime_env={
-        "env_vars": {
-            "TPU_MULTIHOST_BACKEND": "ray",
-            # Execute Gemma 4 routed expert layers on TPU TensorCores instead of SparseCore.
-            "USE_MOE_SPARSE_CORE": "0",
-            "VLLM_RAY_EXTRA_ENV_VARS_TO_COPY": "USE_MOE_SPARSE_CORE",
-        }
-    },
-)
-
-app = build_openai_app(LLMServingArgs(llm_configs=[llm_config]))
+def app(args: dict[str, str]) -> Application:
+    llm_config = LLMConfig(
+        model_loading_config=ModelLoadingConfig(
+            model_id=args.get("model_id", "google/gemma-4-26B-A4B-it"),
+        ),
+        accelerator_type=args.get("accelerator_type", "TPU-V6E"),
+        accelerator_config={
+            "kind": "tpu",
+            "topology": args.get("topology", "4x4"),
+        },
+        placement_group_config={
+            "bundle_per_worker": {"TPU": 1},
+        },
+        engine_kwargs={
+            "tensor_parallel_size": int(args.get("tensor_parallel_size", "16")),
+            "enable_expert_parallel": True,
+            "enable_prefix_caching": True,
+            "language_model_only": True,
+            "disable_hybrid_kv_cache_manager": True,
+            "max_model_len": int(args.get("max_model_len", "8192")),
+            "max_num_batched_tokens": int(
+                args.get("max_num_batched_tokens", "4096")
+            ),
+        },
+        experimental_configs={
+            "stream_batching_interval_ms": 10,
+        },
+        runtime_env={
+            "env_vars": {
+                "TPU_MULTIHOST_BACKEND": "ray",
+                "VLLM_XLA_CACHE_PATH": "/tmp/xla_cache",
+                # Execute Gemma 4 routed expert layers on TPU TensorCores instead of SparseCore.
+                "USE_MOE_SPARSE_CORE": "0",
+                "VLLM_RAY_EXTRA_ENV_VARS_TO_COPY": "USE_MOE_SPARSE_CORE,VLLM_XLA_CACHE_PATH",
+            }
+        },
+    )
+    return build_openai_app(LLMServingArgs(llm_configs=[llm_config]))
 # [END gke_ai_ml_gke_ray_rayserve_llm_torchtpu_serve_vllm_torchtpu]

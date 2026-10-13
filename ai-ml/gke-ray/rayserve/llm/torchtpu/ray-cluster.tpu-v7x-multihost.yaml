@@ -18,7 +18,6 @@ kind: RayCluster
 metadata:
   name: ray-serve-torchtpu
 spec:
-  rayVersion: "2.58.0"
   headGroupSpec:
     rayStartParams:
       num-cpus: "0"
@@ -35,10 +34,6 @@ spec:
                 key: hf_api_token
           - name: RAY_TPU_RESOURCE_PER_CHIP
             value: "2"
-          - name: ACCELERATOR_TYPE
-            value: "TPU-V7X"
-          - name: TPU_TOPOLOGY
-            value: "2x2x2"
           ports:
           - containerPort: 6379
             name: gcs
@@ -75,14 +70,6 @@ spec:
                 key: hf_api_token
           - name: RAY_TPU_RESOURCE_PER_CHIP
             value: "2"
-          - name: RAY_EXPERIMENTAL_NOSET_TPU_VISIBLE_CHIPS
-            value: "1"
-          - name: NODE_IP
-            valueFrom:
-              fieldRef:
-                fieldPath: status.hostIP
-          - name: VBAR_CONTROL_SERVICE_URL
-            value: "$(NODE_IP):8353"
           resources:
             limits:
               cpu: "64"

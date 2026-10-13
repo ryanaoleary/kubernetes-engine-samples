@@ -17,7 +17,7 @@ FROM us-docker.pkg.dev/ml-oss-artifacts-transient/torch-tpu-docker-container/tor
 
 USER root
 
-# Install wget for KubeRay health probes and Ray Serve on top of the prebuilt vllm-torchtpu image
+# Install wget for KubeRay health probes and Ray Serve on top of the prebuilt vLLM-TorchTPU image
 RUN apt-get update && apt-get install -y --no-install-recommends wget \
     && rm -rf /var/lib/apt/lists/* \
     && pip install --no-cache-dir "ray[default,serve]==2.58.0"

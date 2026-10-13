@@ -18,7 +18,6 @@ kind: RayCluster
 metadata:
   name: ray-serve-torchtpu
 spec:
-  rayVersion: "2.58.0"
   headGroupSpec:
     rayStartParams:
       num-cpus: "0"
